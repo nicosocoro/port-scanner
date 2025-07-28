@@ -1,12 +1,12 @@
 import socket
 import argparse
 
-def scan_port(host, port):
+def scan_port(host, port, timeout=1000):
     """Attempts to connect to a port and returns if it's open or closed."""
     try:
         print(f"Scanning port {port}")
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(1)  # 1 second timeout
+            s.settimeout(timeout / 1000)
             s.connect((host, port))
             s.send(b"")
             return True
@@ -20,12 +20,24 @@ def main():
     parser.add_argument("--ports", required=False, help="Port range (e.g. 20-80)")
     parser.add_argument("--scan", required=False, help="Flag to scan all 65535 ports. Ignore if --ports is provided")
     parser.add_argument("--ignore-ephemeral", required=False, help="Ignore ephemeral ports (32768-65535). Only works with --scan.")
+    parser.add_argument("--timeout", required=False, default=1000, help="Timeout in milliseconds to analyze a port.")
     args = parser.parse_args()
 
     host = args.host
     ports = args.ports
     scan = args.scan
     ignore_ephemeral = args.ignore_ephemeral
+    timeout = args.timeout
+    
+    # Validate timeout
+    try:
+        timeout = int(timeout)
+        if timeout <= 0:
+            print("[-] Timeout must be greater than 0")
+            return
+    except ValueError:
+        print("[-] Timeout must be a valid integer")
+        return
 
     if ports:
         try:
@@ -56,7 +68,7 @@ def main():
     open_ports = []
     print(f"[+] Scanning {host} ({ip})")
     for port in range(start_port, end_port + 1):
-        if scan_port(ip, port):
+        if scan_port(ip, port, timeout):
             open_ports.append(port)
     
     if len(open_ports) == 0:
