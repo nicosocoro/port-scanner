@@ -42,6 +42,8 @@ This is a basic TCP port scanner written in Python that performs connect scans.
 ### Usage
 
 ```bash
+cd src
+
 # Scan a specific port range
 python main.py --host example.com --ports 20-80
 

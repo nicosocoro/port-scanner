@@ -4,7 +4,7 @@ import asyncio
 import time
 import struct
 import os
-import raw_socket.syn_packet as raw_socket
+import syn_packet as raw_socket
 
 def scan_port(host, port, timeout=1000):
     try:
