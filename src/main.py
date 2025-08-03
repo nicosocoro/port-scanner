@@ -1,9 +1,10 @@
 import socket
-import argparse
 import asyncio
 import time
 import struct
 import os
+import args_parser
+from scan_config import ScanConfig
 import syn_packet as raw_socket
 
 def scan_port(host, port, timeout=1000):
@@ -97,26 +98,10 @@ async def scan_ports_async(host, start_port, end_port, timeout=1000):
     return open_ports
 
 def main():
-    parser = argparse.ArgumentParser(description="Basic TCP Port Scanner")
-    parser.add_argument("--host", required=True, help="Target host (IP or domain)")
-    parser.add_argument("--ports", required=False, help="Port range (e.g. 20-80)")
-    parser.add_argument("--scan", required=False, help="Flag to scan all 65535 ports. Ignore if --ports is provided")
-    parser.add_argument("--ignore-ephemeral", action="store_true", help="Ignore ephemeral ports (32768-65535). Only works with --scan.")
-    parser.add_argument("--timeout", required=False, default=1000, help="Timeout in milliseconds to analyze a port.")
-    parser.add_argument("--parallel", action="store_true", help="Enable parallel scanning for maximum performance.")
-    parser.add_argument("--syn", action="store_true", help="Use SYN scan (requires root privileges).")
-    args = parser.parse_args()
-
-    host = args.host
-    ports = args.ports
-    scan = args.scan
-    ignore_ephemeral = args.ignore_ephemeral
-    timeout = args.timeout
-    parallel_scan = getattr(args, 'parallel', False)
-    syn_scan = args.syn
+    config = args_parser.parse_args_to_config()
     
     try:
-        timeout = int(timeout)
+        timeout = int(config.timeout)
         if timeout <= 0:
             print("[-] Timeout must be greater than 0")
             return
@@ -124,7 +109,7 @@ def main():
         print("[-] Timeout must be a valid integer")
         return
 
-    if ports:
+    if config.ports:
         try:
             start_port, end_port = map(int, args.ports.split("-"))
             if start_port < 1 or end_port > 65535 or start_port > end_port:
@@ -133,8 +118,8 @@ def main():
             print("[-] Invalid port range. Use format like 20-80.")
             return
 
-    elif scan:
-        if ignore_ephemeral:
+    elif config.scan:
+        if config.ignore_ephemeral:
             start_port, end_port = (1, 32767)    
         else:
             start_port, end_port = (1, 65535)   
@@ -144,27 +129,27 @@ def main():
         return
 
     try:
-        ip = socket.gethostbyname(host)
+        ip = socket.gethostbyname(config.host)
     except socket.gaierror:
-        print(f"[-] Cannot resolve hostname: {host}")
+        print(f"[-] Cannot resolve hostname: {config.host}")
         return
 
     # Scan ports
-    print(f"[+] Scanning {host} ({ip})")
+    print(f"[+] Scanning {config.host} ({ip})")
     print(f"[+] Port range: {start_port}-{end_port}")
     print(f"[+] Timeout: {timeout}ms")
     
     start_time = time.time()
     
     open_ports = []
-    if syn_scan:
+    if config.syn_scan:
         print("[+] SYN scanning (requires root privileges)")
         for port in range(start_port, end_port + 1):
             port_num, is_open = scan_port_syn(ip, port, timeout)
             if is_open:
                 open_ports.append(port_num)
                 print(f"Port {port_num}: OPEN")
-    elif parallel_scan:
+    elif config.parallel_scan:
         print(f"[+] Parallel scanning")
         open_ports = asyncio.run(scan_ports_async(ip, start_port, end_port, timeout))
     else:
