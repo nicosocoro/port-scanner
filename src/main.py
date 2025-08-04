@@ -85,11 +85,8 @@ def main():
     print(f"[+] Scanning {config.host} ({ip})")
     print(f"[+] Port range: {start_port}-{end_port}")
     print(f"[+] Timeout: {config.timeout}ms")
-    if config.syn_scan:
-        print("[+] Scan Type: Half open SYN")
-    else:
-        print("[+] Scan Type: Full TCP")
-    
+    print("[+] Scan Type: " + ("Half open SYN" if config.syn_scan else "Full TCP"))
+
     start_time = time.time()
     
     open_ports = []
