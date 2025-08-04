@@ -6,8 +6,8 @@ Refer to the following diagrams for more clarity on how packets are structured:
 
 IP Header
 
-![IP Header](ip-header.png)
+![IP Header](ip_header.png)
 
 TCP Header
 
-![TCP Header](tcp-header.png)
+![TCP Header](tcp_header.png)
