@@ -46,15 +46,29 @@ def scan_port_syn(host, port, timeout=1000):
             if len(response) >= 40:  # Ensure we have IP header (20) + TCP header (20)
                 # Extract TCP header from response (bytes 20-39)
                 tcp_header = response[20:40]
-                # Unpack TCP header and get flags (6th field)
-                tcp_flags = struct.unpack('!BBHHLLBBHHH', tcp_header)[6]
+
+                # H (2 bytes): Destination Port
+                # L (4 bytes): Sequence Number
+                # L (4 bytes): Acknowledgment Number
+                # B (1 byte): Data Offset + Reserved (upper 4 bits: data offset, lower 4 bits: reserved)
+                # B (1 byte): Flags (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
+                # H (2 bytes): Window Size
+                # H (2 bytes): Checksum
+                # H (2 bytes): Urgent Pointer
+                #
+                # Check /raw_socket/tcp_header.png as reference
+                # Consider it only cointains 6 flags
+                flag_index = 5 # 6th field in unpacked TCP header
+                tcp_flags = struct.unpack('!HHLLBBHHH', tcp_header)[flag_index]
                 
                 # Check for SYN-ACK response (flags = 18 = SYN + ACK)
                 # This indicates the port is open and accepting connections
+                # 18 = 00010010 --> (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
                 if tcp_flags == 18:
                     return port, True
                 # Check for RST response (flags = 4)
                 # This indicates the port is closed but reachable
+                # 4 = 00000100 --> (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
                 elif tcp_flags == 4:
                     return port, False
         except socket.timeout:
