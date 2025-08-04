@@ -15,7 +15,7 @@ def scan_port(host, port, timeout=1000):
     except socket.error:
         return port, False
 
-async def scan_port_async(host, port, timeout=1000):
+async def full_tcp_scan_single_port_async(host, port, timeout=1000):
     try:
         _, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port),
@@ -27,13 +27,13 @@ async def scan_port_async(host, port, timeout=1000):
     except (asyncio.TimeoutError, OSError):
         return port, False
 
-async def scan_ports_async(host, start_port, end_port, config: ScanConfig):
+async def full_tcp_scan_async(host, start_port, end_port, config: ScanConfig):
     open_ports = []
     semaphore = asyncio.Semaphore(config.max_concurrent_scans)
 
     async def sem_scan(port):
         async with semaphore:
-            return await scan_port_async(host, port, config.timeout)
+            return await full_tcp_scan_single_port_async(host, port, config.timeout)
 
     tasks = [sem_scan(port) for port in range(start_port, end_port + 1)]
     for task in asyncio.as_completed(tasks):
@@ -91,9 +91,9 @@ def main():
     
     open_ports = []
     if config.syn_scan:
-        open_ports = asyncio.run(raw_socket.scan_ports_syn_async(ip, start_port, end_port, config.timeout))
+        open_ports = asyncio.run(raw_socket.half_open_syn_scan_async(ip, start_port, end_port, config.timeout))
     else:
-        open_ports = asyncio.run(scan_ports_async(ip, start_port, end_port, config))
+        open_ports = asyncio.run(full_tcp_scan_async(ip, start_port, end_port, config))
     
     end_time = time.time()
     elapsed_time = end_time - start_time

@@ -78,7 +78,7 @@ def create_syn_packet(dst_ip, dst_port):
     # Combine IP and TCP headers to create complete packet
     return ip_header + tcp_header
 
-def scan_port_syn(host, port, timeout=1000):
+def half_open_syn_single_port_async(host, port, timeout=1000):
     """Scan a port using SYN packet (requires root privileges)."""
     try:
         # Check if running as root (raw sockets require elevated privileges)
@@ -128,11 +128,11 @@ def scan_port_syn(host, port, timeout=1000):
         print(f"[-] Error in SYN scan: {e}")
         return port, False
 
-async def scan_ports_syn_async(ip, start_port, end_port, timeout):
+async def half_open_syn_scan_async(ip, start_port, end_port, timeout):
     open_ports = []
     tasks = []
     for port in range(start_port, end_port + 1):
-        tasks.append(scan_port_syn(ip, port, timeout))
+        tasks.append(half_open_syn_single_port_async(ip, port, timeout))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for _, result in enumerate(results):
         if isinstance(result, tuple):
