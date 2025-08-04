@@ -78,51 +78,49 @@ def create_syn_packet(dst_ip, dst_port):
     # Combine IP and TCP headers to create complete packet
     return ip_header + tcp_header
 
-def half_open_syn_single_port_async(host, port, timeout=1000):
+async def half_open_syn_single_port_async(host, port, timeout):
     """Scan a port using SYN packet (requires root privileges)."""
     try:
         # Check if running as root (raw sockets require elevated privileges)
         if os.geteuid() != 0:
             print("[-] SYN scan requires root privileges. Use sudo.")
             return port, False
-        
-        # Create raw socket for custom packet manipulation
-        # AF_INET = IPv4, SOCK_RAW = raw socket, IPPROTO_TCP = TCP protocol
-        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-        s.settimeout(timeout / 1000)  # Set timeout in seconds
-        
-        # Create custom SYN packet with our own IP and TCP headers
-        syn_packet = create_syn_packet(host, port)
 
-        # Send the raw packet to the target host
-        # (host, 0) = destination address, port 0 (not used for raw sockets)
+        # Create raw socket for custom packet manipulation
+        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+        s.settimeout(timeout / 1000)
+
+        syn_packet = create_syn_packet(host, port)
         s.sendto(syn_packet, (host, 0))
-        
+
         # Listen for response from the target
+        loop = asyncio.get_running_loop()
         try:
-            # Receive response packet (max 1024 bytes)
-            response, _ = s.recvfrom(1024)
-            
-            # Parse the response packet
-            if len(response) >= 40:  # Ensure we have IP header (20) + TCP header (20)
-                # Extract TCP header from response (bytes 20-39)
+            response, _ = await loop.run_in_executor(
+                None, lambda: s.recvfrom(1024)
+            )
+            if len(response) >= 40:
                 tcp_header = response[20:40]
                 tcp_flags = extract_tcp_flags_from(tcp_header)
-                
-                # This indicates the port is open and accepting connections
                 if tcp_flags == TCP_SYN_ACK_FLAG:
+                    print(f"[-] Received SYN-ACK from {host}:{port}")
+                    s.close()
                     return port, True
-                # This indicates the port is closed but reachable
                 elif tcp_flags == TCP_RST_FLAG:
+                    print(f"[-] Received RST from {host}:{port}")
+                    s.close()
                     return port, False
         except socket.timeout:
-            # No response received within timeout period
+            print(f"[-] Timeout while waiting for response from {host}:{port}")
+            s.close()
             return port, False
-        
-        # Close the raw socket
+
         s.close()
         return port, False
-        
+    except (socket.error, PermissionError) as e:
+        print(f"[-] Error in SYN scan: {e}")
+        return port, False
+    
     except (socket.error, PermissionError) as e:
         # Handle socket errors and permission errors
         print(f"[-] Error in SYN scan: {e}")
