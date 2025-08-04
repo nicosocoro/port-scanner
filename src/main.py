@@ -1,10 +1,8 @@
 import socket
 import asyncio
 import time
-import struct
 import os
 import args_parser
-from scan_config import ScanConfig
 import syn_packet as raw_socket
 
 def scan_port(host, port, timeout=1000):
@@ -46,13 +44,13 @@ def scan_port_syn(host, port, timeout=1000):
             if len(response) >= 40:  # Ensure we have IP header (20) + TCP header (20)
                 # Extract TCP header from response (bytes 20-39)
                 tcp_header = response[20:40]
-                tcp_flags = syn_packet.extract_tcp_flags_from(tcp_header)
+                tcp_flags = raw_socket.extract_tcp_flags_from(tcp_header)
                 
                 # This indicates the port is open and accepting connections
-                if tcp_flags == syn_packet.TCP_SYN_ACK_FLAG:
+                if tcp_flags == raw_socket.TCP_SYN_ACK_FLAG:
                     return port, True
                 # This indicates the port is closed but reachable
-                elif tcp_flags == syn_packet.TCP_RST_FLAG:
+                elif tcp_flags == raw_socket.TCP_RST_FLAG:
                     return port, False
         except socket.timeout:
             # No response received within timeout period
@@ -108,7 +106,7 @@ def main():
 
     if config.ports:
         try:
-            start_port, end_port = map(int, args.ports.split("-"))
+            start_port, end_port = map(int, config.ports.split("-"))
             if start_port < 1 or end_port > 65535 or start_port > end_port:
                 raise ValueError
         except ValueError:
