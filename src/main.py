@@ -46,30 +46,13 @@ def scan_port_syn(host, port, timeout=1000):
             if len(response) >= 40:  # Ensure we have IP header (20) + TCP header (20)
                 # Extract TCP header from response (bytes 20-39)
                 tcp_header = response[20:40]
-
-                # H (2 bytes): Destination Port
-                # L (4 bytes): Sequence Number
-                # L (4 bytes): Acknowledgment Number
-                # B (1 byte): Data Offset + Reserved (upper 4 bits: data offset, lower 4 bits: reserved)
-                # B (1 byte): Flags (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
-                # H (2 bytes): Window Size
-                # H (2 bytes): Checksum
-                # H (2 bytes): Urgent Pointer
-                #
-                # Check /raw_socket/tcp_header.png as reference
-                # Consider it only cointains 6 flags
-                flag_index = 5 # 6th field in unpacked TCP header
-                tcp_flags = struct.unpack('!HHLLBBHHH', tcp_header)[flag_index]
+                tcp_flags = syn_packet.extract_tcp_flags_from(tcp_header)
                 
-                # Check for SYN-ACK response (flags = 18 = SYN + ACK)
                 # This indicates the port is open and accepting connections
-                # 18 = 00010010 --> (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
-                if tcp_flags == 18:
+                if tcp_flags == syn_packet.TCP_SYN_ACK_FLAG:
                     return port, True
-                # Check for RST response (flags = 4)
                 # This indicates the port is closed but reachable
-                # 4 = 00000100 --> (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
-                elif tcp_flags == 4:
+                elif tcp_flags == syn_packet.TCP_RST_FLAG:
                     return port, False
         except socket.timeout:
             # No response received within timeout period

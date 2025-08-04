@@ -1,6 +1,25 @@
 import socket
 import struct
 
+TCP_HEADER_UNPACK_FORMAT = '!HHLLBBHHH'
+TCP_SYN_ACK_FLAG = 0x18 # 18 = 00010010 --> (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
+TCP_RST_FLAG = 0x04 # 4 = 00000100 --> (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
+
+def extract_tcp_flags_from(tcp_header):
+    # H (2 bytes): Destination Port
+    # L (4 bytes): Sequence Number
+    # L (4 bytes): Acknowledgment Number
+    # B (1 byte): Data Offset + Reserved (upper 4 bits: data offset, lower 4 bits: reserved)
+    # B (1 byte): Flags (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
+    # H (2 bytes): Window Size
+    # H (2 bytes): Checksum
+    # H (2 bytes): Urgent Pointer
+    
+    # Check /raw_socket/tcp_header.png as reference
+    # Consider it only cointains 6 flags
+    flag_index = 5 # 6th field in unpacked TCP header
+    return struct.unpack(TCP_HEADER_UNPACK_FORMAT, tcp_header)[flag_index]
+
 def create_syn_packet(dst_ip, dst_port):
     """Create a SYN packet for scanning."""
     # IP header fields
