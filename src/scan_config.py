@@ -4,6 +4,7 @@ class ScanConfig:
         self.ports = ports
         self.scan = scan
         self.ignore_ephemeral = ignore_ephemeral
-        self.timeout = timeout
+        self.timeout = int(timeout)
         self.sequential_scan = sequential_scan
         self.syn_scan = syn_scan
+        self.max_concurrent_scans = 1000

@@ -1,8 +1,8 @@
 import socket
 import asyncio
 import time
-import os
 import args_parser
+from scan_config import ScanConfig
 import syn_packet as raw_socket
 
 def scan_port(host, port, timeout=1000):
@@ -27,11 +27,15 @@ async def scan_port_async(host, port, timeout=1000):
     except (asyncio.TimeoutError, OSError):
         return port, False
 
-async def scan_ports_async(host, start_port, end_port, timeout=1000):
+async def scan_ports_async(host, start_port, end_port, config: ScanConfig):
     open_ports = []
+    semaphore = asyncio.Semaphore(config.max_concurrent_scans)
 
-    tasks = [scan_port_async(host, port, timeout) for port in range(start_port, end_port + 1)]
-    
+    async def sem_scan(port):
+        async with semaphore:
+            return await scan_port_async(host, port, config.timeout)
+
+    tasks = [sem_scan(port) for port in range(start_port, end_port + 1)]
     for task in asyncio.as_completed(tasks):
         try:
             port, is_open = await task
@@ -39,15 +43,13 @@ async def scan_ports_async(host, start_port, end_port, timeout=1000):
                 open_ports.append(port)
         except Exception:
             continue
-    
     return open_ports
 
 def main():
     config = args_parser.parse_args_to_config()
     
     try:
-        timeout = int(config.timeout)
-        if timeout <= 0:
+        if config.timeout <= 0:
             print("[-] Timeout must be greater than 0")
             return
     except ValueError:
@@ -82,23 +84,27 @@ def main():
     # Scan ports
     print(f"[+] Scanning {config.host} ({ip})")
     print(f"[+] Port range: {start_port}-{end_port}")
-    print(f"[+] Timeout: {timeout}ms")
+    print(f"[+] Timeout: {config.timeout}ms")
+    if config.syn_scan:
+        print("[+] Scan Type: Half open SYN")
+    else:
+        print("[+] Scan Type: Full TCP")
     
     start_time = time.time()
     
     open_ports = []
     if config.syn_scan:
-        open_ports = asyncio.run(raw_socket.scan_ports_syn_async(ip, start_port, end_port, timeout))
+        open_ports = asyncio.run(raw_socket.scan_ports_syn_async(ip, start_port, end_port, config.timeout))
     elif config.sequential_scan:
-        print("[+] Sequential scanning")
+        print("[+] Sequential scanning. Not recommended for large port ranges.")
         for port in range(start_port, end_port + 1):
-            port_num, is_open = scan_port(ip, port, timeout)
+            port_num, is_open = scan_port(ip, port, config.timeout)
             if is_open:
                 open_ports.append(port_num)
                 print(f"Port {port_num}: OPEN")
     else:
         print(f"[+] Parallel scanning")
-        open_ports = asyncio.run(scan_ports_async(ip, start_port, end_port, timeout))
+        open_ports = asyncio.run(scan_ports_async(ip, start_port, end_port, config))
     
     end_time = time.time()
     elapsed_time = end_time - start_time
