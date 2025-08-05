@@ -4,8 +4,8 @@ import socket
 import struct
 
 TCP_HEADER_UNPACK_FORMAT = '!HHLLBBHHH'
-TCP_SYN_ACK_FLAG = 0x18 # 18 = 00010010 --> (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
-TCP_RST_FLAG = 0x04 # 4 = 00000100 --> (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
+TCP_SYN_ACK_FLAG = 0x12 # 12 = 0001 0010 --> (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
+TCP_RST_FLAG = 0x04 # 4 = 0000 0100 --> (CWR, ECE, URG, ACK, PSH, RST, SYN, FIN)
 
 def extract_tcp_flags_from(tcp_header):
     # H (2 bytes): Destination Port
@@ -20,6 +20,7 @@ def extract_tcp_flags_from(tcp_header):
     # Check /raw_socket/tcp_header.png as reference
     # Consider it only cointains 6 flags
     flag_index = 5 # 6th field in unpacked TCP header
+    print(f"[+] Extracting TCP flags from header: {struct.unpack(TCP_HEADER_UNPACK_FORMAT, tcp_header)}")
     return struct.unpack(TCP_HEADER_UNPACK_FORMAT, tcp_header)[flag_index]
 
 def create_syn_packet(dst_ip, dst_port):
@@ -33,15 +34,32 @@ def create_syn_packet(dst_ip, dst_port):
     ip_frag_off = 0                  # Fragment offset (0 = no fragmentation)
     ip_ttl = 255                     # Time to live (255 = maximum)
     ip_proto = socket.IPPROTO_TCP    # Protocol (6 = TCP)
-    ip_check = 0                     # Checksum (0 = calculated by kernel)
-    ip_saddr = socket.inet_aton("127.0.0.1")  # Source IP address (localhost)
-    ip_daddr = socket.inet_aton(dst_ip)       # Destination IP address
+    ip_check = 0                     # Checksum (0 = calculated later)
+    
+    # Get the actual local IP address for the outgoing packet
+    try:
+        # This gets the default outbound IP for the destination
+        temp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        temp_sock.connect((dst_ip, 0))
+        local_ip = temp_sock.getsockname()[0]
+        temp_sock.close()
+    except Exception:
+        local_ip = "127.0.0.1"  # Fallback if unable to determine
+
+    ip_saddr = socket.inet_aton(local_ip)  # Source IP address (actual local IP)
+    ip_daddr = socket.inet_aton(dst_ip)    # Destination IP address
     
     # Combine version and header length into one byte
     ip_ver_ihl = (ip_version << 4) + ip_ihl
     
     # Pack IP header into binary format
     # Format: !BBHHHBBH4s4s = version/ihl, tos, tot_len, id, frag_off, ttl, proto, check, saddr, daddr
+    ip_header = struct.pack('!BBHHHBBH4s4s',
+        ip_ver_ihl, ip_tos, ip_tot_len, ip_id, ip_frag_off,
+        ip_ttl, ip_proto, ip_check, ip_saddr, ip_daddr)
+    
+    ip_check = checksum(ip_header)
+
     ip_header = struct.pack('!BBHHHBBH4s4s',
         ip_ver_ihl, ip_tos, ip_tot_len, ip_id, ip_frag_off,
         ip_ttl, ip_proto, ip_check, ip_saddr, ip_daddr)
@@ -58,36 +76,60 @@ def create_syn_packet(dst_ip, dst_port):
     tcp_psh = 0                      # PSH flag (0 = not set)
     tcp_ack = 0                      # ACK flag (0 = not set)
     tcp_urg = 0                      # URG flag (0 = not set)
+    tcp_ece = 0                      # ECE flag (0 = not set)
+    tcp_cwr = 0                      # CWR flag (0 = not set)
     tcp_window = socket.htons(5840)  # Window size (network byte order)
-    tcp_check = 0                    # Checksum (0 = calculated by kernel)
+    tcp_check = 0                    # Checksum (0 = calculated later)
     tcp_urg_ptr = 0                  # Urgent pointer (0 = not used)
-    
+
     # Combine data offset and reserved bits
     tcp_offset_res = (tcp_doff << 4) + 0
-    
-    # Combine all TCP flags into one byte
-    # Flags: FIN(1) + SYN(2) + RST(4) + PSH(8) + ACK(16) + URG(32)
-    tcp_flags = tcp_fin + (tcp_syn << 1) + (tcp_rst << 2) + (tcp_psh << 3) + (tcp_ack << 4) + (tcp_urg << 5)
-    
+
+    # Combine all TCP flags into one byte (8 bits)
+    # Flags: FIN(1) + SYN(2) + RST(4) + PSH(8) + ACK(16) + URG(32) + ECE(64) + CWR(128)
+    tcp_flags = (tcp_fin << 0) | (tcp_syn << 1) | (tcp_rst << 2) | (tcp_psh << 3) | (tcp_ack << 4) | (tcp_urg << 5) | (tcp_ece << 6) | (tcp_cwr << 7)
+
+    tcp_header = struct.pack('!HHLLBBHHH',
+        tcp_sport, tcp_dport, tcp_seq, tcp_ack_seq,
+        tcp_offset_res, tcp_flags, tcp_window, tcp_check, tcp_urg_ptr)
+    pseudo_header = struct.pack('!4s4sBBH', ip_saddr, ip_daddr, 0, socket.IPPROTO_TCP, len(tcp_header))
+    checksum_data = pseudo_header + tcp_header
+    tcp_check = checksum(checksum_data)
+
     # Pack TCP header into binary format
     # Format: !HHLLBBHHH = sport, dport, seq, ack_seq, offset_res, flags, window, check, urg_ptr
     tcp_header = struct.pack('!HHLLBBHHH',
         tcp_sport, tcp_dport, tcp_seq, tcp_ack_seq,
         tcp_offset_res, tcp_flags, tcp_window, tcp_check, tcp_urg_ptr)
-    
+
     # Combine IP and TCP headers to create complete packet
     return ip_header + tcp_header
+
+def checksum(data):
+    if len(data) % 2:
+        data += b'\x00'  # pad if not even
+    s = 0
+    for i in range(0, len(data), 2):
+        word = (data[i] << 8) + data[i + 1]
+        s += word
+        s = (s & 0xffff) + (s >> 16)  # carry around
+    return ~s & 0xffff
 
 async def half_open_syn_single_port_async(host, port, timeout):
     """Scan a port using SYN packet (requires root privileges)."""
     try:
         # Check if running as root (raw sockets require elevated privileges)
+        # TODO: Only works for Unix-like systems
         if os.geteuid() != 0:
             print("[-] SYN scan requires root privileges. Use sudo.")
             return port, False
 
         # Create raw socket for custom packet manipulation
         s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+
+        # Important -- without this, the OS will add its own IP header
+        s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+
         s.settimeout(timeout / 1000)
 
         syn_packet = create_syn_packet(host, port)
@@ -99,6 +141,7 @@ async def half_open_syn_single_port_async(host, port, timeout):
             response, _ = await loop.run_in_executor(
                 None, lambda: s.recvfrom(1024)
             )
+            
             if len(response) >= 40:
                 tcp_header = response[20:40]
                 tcp_flags = extract_tcp_flags_from(tcp_header)
@@ -108,6 +151,10 @@ async def half_open_syn_single_port_async(host, port, timeout):
                     return port, True
                 elif tcp_flags == TCP_RST_FLAG:
                     print(f"[-] Received RST from {host}:{port}")
+                    s.close()
+                    return port, False
+                else:
+                    # print(f"[-] Received unexpected response from {host}:{port} (length: {len(response)})")
                     s.close()
                     return port, False
         except socket.timeout:
@@ -120,10 +167,8 @@ async def half_open_syn_single_port_async(host, port, timeout):
     except (socket.error, PermissionError) as e:
         print(f"[-] Error in SYN scan: {e}")
         return port, False
-    
-    except (socket.error, PermissionError) as e:
-        # Handle socket errors and permission errors
-        print(f"[-] Error in SYN scan: {e}")
+    except Exception as e:
+        print(f"[-] Unexpected error in SYN scan: {e}")
         return port, False
 
 async def half_open_syn_scan_async(ip, start_port, end_port, timeout):
