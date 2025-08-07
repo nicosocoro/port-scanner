@@ -71,17 +71,39 @@ For example, response from port 80 may be interpreted as response from port 81.
 
 ### Usage
 
+#### Required Arguments
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `--host` | string | Target host to scan (IP address or domain name) |
+
+#### Optional Arguments
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--ports` | string | - | Port range to scan (e.g., `20-80`, `80,443,22`, `80`) |
+| `--scan` | flag | false | Scan all 65,535 ports (ignored if `--ports` is provided) |
+| `--ignore-ephemeral` | flag | false | Skip ephemeral ports (32768-65535) when using `--scan` |
+| `--timeout` | integer | 1000 | Connection timeout in milliseconds |
+| `--syn` | flag | false | Use SYN scan method (requires root privileges) |
+
+#### Example usage
+
 ```bash
 cd src
 
 # Scan a specific port range
 python main.py --host example.com --ports 20-80
 
+# Full scan
+python main.py --host example.com --scan
+
 # Scan common ports
-python main.py --host 192.168.1.1 --ports 1-1024
+python main.py --host example.com --ports 1-1024
 
 # SYN scan
-python main.py --host 192.168.1.1 --ports 1-1024 --syn
+## Requires root privileges
+sudo python main.py --host example.com --ports 1-1024 --syn
 ```
 
 ### Example Output
