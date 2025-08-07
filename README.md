@@ -57,6 +57,18 @@ Possible responses from server:
 * `RST` (flags 0x04): Closed port   
 * Any other: Unexpected response
 
+----
+
+Code implemented in [src/syn_packet.py](./src/syn_packet.py).
+
+This particular solution performs multiple port scanning asynchronously.
+
+It's uses `Future` from [asyncio](https://docs.python.org/3/library/asyncio.html) and has a Future's coordination system
+to avoid responses collisions.
+Otherwise, at it happened at first, the multiple responses may not be properly handled and messed up among them.
+
+For example, response from port 80 may be interpreted as response from port 81.
+
 ### Usage
 
 ```bash
