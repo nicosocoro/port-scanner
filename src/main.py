@@ -45,7 +45,7 @@ async def full_tcp_scan_async(host, start_port, end_port, config: ScanConfig):
             continue
     return open_ports
 
-def main():
+async def main():
     config = args_parser.parse_args_to_config()
     
     try:
@@ -91,9 +91,9 @@ def main():
     
     open_ports = []
     if config.syn_scan:
-        open_ports = asyncio.run(raw_socket.half_open_syn_scan_async(ip, start_port, end_port, config.timeout))
+        open_ports = await half_open_syn_scan_async(ip, start_port, end_port, config.timeout)
     else:
-        open_ports = asyncio.run(full_tcp_scan_async(ip, start_port, end_port, config))
+        open_ports = await full_tcp_scan_async(ip, start_port, end_port, config)
     
     end_time = time.time()
     elapsed_time = end_time - start_time
@@ -107,6 +107,29 @@ def main():
         for port in sorted(open_ports):
             print(f"  - Port {port}: OPEN")
     
+async def half_open_syn_scan_async(ip, start_port, end_port, timeout):
+    """Scan a range of ports using SYN scanning."""
+    open_ports = []
+    
+    async with raw_socket.SYNScanner() as scanner:
+        tasks = []
+        for port in range(start_port, end_port + 1):
+            tasks.append(scanner.scan_port(ip, port, timeout))
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for result in results:
+            if isinstance(result, tuple):
+                port_num, is_open = result
+                if is_open:
+                    open_ports.append(port_num)
+                    print(f"[+] Port {port_num} is OPEN")
+                else:
+                    print(f"[-] Port {port_num} is CLOSED")
+            elif isinstance(result, Exception):
+                print(f"[-] Error scanning port: {result}")
+    
+    return open_ports
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
