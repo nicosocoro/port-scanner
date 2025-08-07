@@ -2,6 +2,12 @@
 
 This project is a solution for this challenge [The Challenge - Building A Network Port Scanner](https://codingchallenges.fyi/challenges/challenge-port-scanner/).
 
+### Security Note - Disclaimer 
+
+⚠️ **Important**: Only scan systems you own or have explicit permission to test. Unauthorized port scanning may be illegal in some jurisdictions.
+
+This port scanner was built with the sole purpose of learning about TCP, Sockets and any related content.
+
 ## What is a Port Scanner?
 
 A port scanner is a network security tool that examines a target system to identify which network ports are open, closed, or filtered. 
@@ -35,9 +41,21 @@ This is a basic TCP port scanner written in Python that performs connect scans.
 ### Features
 
 - Scan specific port ranges (e.g., 20-80)
+- SYN (Half open) scan
 - Hostname resolution to IP address
 - Timeout handling for faster scanning
 - Clear output showing open/closed ports
+
+#### SYN (Half open) scan
+
+Only send SYN message from TCP handshake without establishing a full TCP three-way handshake.
+
+It's faster and potentially bypasses basic firewall rules.
+
+Possible responses from server:
+* `SYN-ACK` (flags 0x12): Open and accepting connections   
+* `RST` (flags 0x04): Closed port   
+* Any other: Unexpected response
 
 ### Usage
 
@@ -49,6 +67,9 @@ python main.py --host example.com --ports 20-80
 
 # Scan common ports
 python main.py --host 192.168.1.1 --ports 1-1024
+
+# SYN scan
+python main.py --host 192.168.1.1 --ports 1-1024 --syn
 ```
 
 ### Example Output
@@ -61,10 +82,6 @@ Port 22: OPEN
 Port 23: CLOSED
 ...
 ```
-
-### Security Note
-
-⚠️ **Important**: Only scan systems you own or have explicit permission to test. Unauthorized port scanning may be illegal in some jurisdictions.
 
 ## Common Ports
 
