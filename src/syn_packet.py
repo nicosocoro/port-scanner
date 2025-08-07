@@ -16,6 +16,7 @@ class SYNScanner:
         self.receiver_task = None
 
     async def __aenter__(self):
+        """Initialize when use 'async with'."""
         # Check privileges
         if os.geteuid() != 0:
             raise PermissionError("SYN scan requires root privileges. Use sudo.")
@@ -30,6 +31,7 @@ class SYNScanner:
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Clean up when use 'async with'."""
         if self.receiver_task:
             self.receiver_task.cancel()
             try:
