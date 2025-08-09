@@ -2,6 +2,8 @@
 
 This project is a solution for this challenge [The Challenge - Building A Network Port Scanner](https://codingchallenges.fyi/challenges/challenge-port-scanner/).
 
+Currently, only works in Unix-like environments (can use WSL for Windows)
+
 ### Security Note - Disclaimer 
 
 ⚠️ **Important**: Only scan systems you own or have explicit permission to test. Unauthorized port scanning may be illegal in some jurisdictions.
@@ -137,3 +139,4 @@ Port 23: CLOSED
 - Standard library modules: `socket`, `argparse`
 
 No additional packages required! 
+
